@@ -50,63 +50,73 @@ function Expand-ZIPFile
 http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d6200
 #>
 
-	[CmdletBinding()]
+	[CmdletBinding(SupportsShouldProcess=$true)]
 	param(
 		[Parameter(ValueFromPipelineByPropertyName=$true)]
+		[Alias("ZIPFile","FileName")]
 		[string[]]$FullName
 		,[Parameter(ValueFromPipelineByPropertyName=$true)]
 		[string[]]$DirectoryName
 		,[Parameter(ValueFromPipelineByPropertyName=$true)]
 		[string[]]$BaseName
+		,[Parameter(ValueFromPipelineByPropertyName=$true)]
+		[string[]]$Destination
 		,[Parameter(ValueFromPipeline=$true)]
 		[object[]]$FileInfo
-		,[string[]]$Destination = ($FullName -split "\.")[0..(($FullName -split "\.").count - 2)]
 	)
 
 	BEGIN {
-	$shell = new-object -com shell.application
+			write-verbose "Begin PipelineLength: $(($PSCmdlet.MyInvocation).PipelineLength)"
+			write-verbose "Begin PipelinePosition: $(($PSCmdlet.MyInvocation).PipelinePosition)"
+		$shell = new-object -com shell.application
 	}
 
 	PROCESS {
-#$FullName |% {
-			[string[]]$Destination = ($FullName -split "\.")[0..(($FullName -split "\.").count - 2)]
-			if (! $Destination) {
+			$FullName = (Resolve-Path $FullName).ProviderPath
+			write-verbose "PipelineLength: $(($PSCmdlet.MyInvocation).PipelineLength)"
+			write-verbose "PipelinePosition: $(($PSCmdlet.MyInvocation).PipelinePosition)"
+			write-verbose "Dest from bound parameters - ${Destination}"
+			if (($PSCmdlet.MyInvocation.PipelineLength -gt 1) -or (! $Destination)) {
+				write-verbose "setting Dest manually"
 				$Destination = "${DirectoryName}\${BaseName}"
+				[string[]]$Destination = "$(split-path -parent $FullName)\$( ((split-path -leaf $FullName) -split "\.")[0])"
 			}
 			write-verbose "Dest - ${Destination}"
 			write-verbose "Dir - ${DirectoryName}"
 			write-verbose "base - ${BaseName}"
 			write-verbose "File - ${_}"
 			write-verbose "File - ${FullName}"
-			Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using .NET 4.5" 
  
-		If ($PSVersionTable.PSVersion.Major -ge 3 -and 
-       ((Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -like "4.5*" -or 
-       (Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Client" -ErrorAction SilentlyContinue).Version -like "4.5*"))
-		{
-	        try { 
-	            [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null 
-	            [System.IO.Compression.ZipFile]::ExtractToDirectory("$Fullname", "$Destination") 
-	        } 
-	        catch { 
-	            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
-	        } 
-		}
-	    else { 
-	 
-	        Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using COM" 
-	 
-	        try { 
-	 
-				$zip = $shell.NameSpace($FullName)
-				if (! (test-path $Destination) ) { md $Destination -Force }
-				$shell.Namespace($Destination).copyhere($zip.items())
+		If (! $PSBoundParameters.WhatIf) {
+			If ($PSVersionTable.PSVersion.Major -ge 3 -and 
+	       ((Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -like "4.5*" -or 
+	       (Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Client" -ErrorAction SilentlyContinue).Version -like "4.5*"))
+			{
+				Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using .NET 4.5" 
+		        try { 
+		            [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null 
+		            [System.IO.Compression.ZipFile]::ExtractToDirectory("$Fullname", "$Destination") 
+		        } 
+		        catch { 
+		            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
+		        } 
 			}
-	#	} 
-	        catch { 
-	            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
-	        } 
-	    } 
+		    else { 
+		 
+		        Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using COM" 
+		 
+		        try { 
+		 
+					$zip = $shell.NameSpace($FullName)
+					if (! (test-path $Destination) ) { md $Destination -Force }
+					$shell.Namespace($Destination).copyhere($zip.items())
+				}
+		#	} 
+		        catch { 
+		            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
+		        } 
+		    } 
+		}
 	}
 
 	END {
@@ -148,6 +158,8 @@ if specified, writes a sample config file using default settings to the file 'Ho
 By default every file date/time is set to the release date shown in the RSS feed. This is true of files and folders found, as well as any downloaded. Specify -NoTouch to leave the datetime as is.
 .PARAMETER NoLog
 Do not log downloads. Logging is on by default.
+.PARAMETER NoUnzip
+Do not automatically extract .zip files. Zip files are extracted by default.
 .PARAMETER Reentrant
 Ignore this parameter. This is for internal program use, not expected to be a user-supplied parameter. It's a hack way for the function to re-launch itself using the piped config file, rather than parse the config file as a function of.. the function.
 .EXAMPLE
@@ -202,7 +214,7 @@ format-default : The member "Item" is already present.
 		[Alias("Destination","Target","SavePath")]
 		[string[]]$FilePath = $($pwd.ProviderPath -replace "\\$","")
 		,[Parameter(ValueFromPipelineByPropertyName=$true)]
-		[string[]]$rssURL = 'http://support.citrix.com/product/xa/v6.5_2008r2/hotfix/general/?rss=on'
+		[string[]]$rssURL = 'http://support.citrix.com/search?searchQuery=*&lang=en&sort=date_desc&ct=Hotfixes&prod=XenApp&pver=XenApp+6.5+for+Windows+Server+2008+R2'
 		,[string]$CsvConfigFile
 		,[string]$LogFilePath = "CtxHotfixDownloadLog.csv"
 		,[string]$regBase = 'Software\NCGi\saTools\CitrixTools'
@@ -210,6 +222,7 @@ format-default : The member "Item" is already present.
 		,[switch]$WriteConfigSample = $false
 		,[switch]$NoTouch = $false
 		,[switch]$NoLog = $false
+		,[switch]$NoUnZip = $false
 		,[bool]$Reentrant = $false
 	)
 
@@ -231,8 +244,9 @@ format-default : The member "Item" is already present.
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.0'}
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.1'}
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.0'}
+			$produrl += @{prod='EdgeSight';pver='EdgeSight+for+XenApp+5.4'}
 
-			$prefix = 'http://support.citrix.com/search?searchQuery=*&lang=en&sort=date_desc&ct=Hotfixes&ctcf=Public&';
+			$prefix = 'http://support.citrix.com/search?searchQuery=*&lang=en&sort=date_desc&ct=Hotfixes&';
 			$produrl |% { 
 					$prod = $_.prod;
 					$pver = $_.pver;
@@ -284,14 +298,6 @@ format-default : The member "Item" is already present.
 				# array of files downloaded
 			$dlfiles = @()
 			$logs = @()
-				#
-				# regex patterns of files we want to download
-				# must be a better way to do this, but this works and it's easy
-				# for now.
-			[regex]$msppat = "(http\S+\.msp)"
-			[regex]$zippat = "(http\S+\.zip)"
-			[regex]$isopat = "(http\S+\.iso)"
-			[regex]$rfilename = "(\w+\.\w+)$"
 			$webclient = new-object System.Net.Webclient
 		}
 	}
@@ -304,8 +310,8 @@ format-default : The member "Item" is already present.
 				write-verbose $_
 				if (! ($_ -match "^#")) 
 				{
-				$url = $_
-				write-verbose $url
+				$thisverurl = $_
+				write-verbose $thisverurl
 				write-verbose "Logfile: $($LogFilePath)"
 				try {
 					if (! (test-path $FilePath)) { 
@@ -320,25 +326,31 @@ format-default : The member "Item" is already present.
 					$kblinks = new-object -type PSObject
 					$kblist = @{};
 					$kbitems = @()
+						# by default we don't want patches marked 'Limited' 
+						# so we need to suffix the product Url with 'Recommended' and 'Public'
+						# this may be better done in the config file
+						# so we get the correct URL without massaging it
+						# but would require two lines for each product
+						# however, making the config URL the absolute authority *would*
+						# permit users to specify *all* patches, including Limited, if desired
+					foreach ($ctcf in ("Recommended","Public")) {
+						$url = "${thisverurl}&ctcf=${ctcf}"
+						write-verbose $url
 					$item=@{link="";date=""}
 						# new Citrix support page returns 10 links at a time
 						# so we keep fetching until the return count is less than 10
 						# at which point we have all of them
 					$startct=0;
-					write-verbose "Starting do..while"
 					do {
-						write-verbose "in do..while"
 						$alist = ((new-object net.webclient).downloadstring($url) -split '\n' )
 						$kblist = ($alist |% { 
 										if ($_ -match "(http:\/\/support.citrix.com\/article\/CTX\d+)") 
 										{
-										write-verbose "matched support link = $($_)"
 											$item.link = $matches[1];
 										}
 										elseif ($_ -match "slistDate.*\>(.*)\<" )
 										{ 
 						 					$item.date = $matches[1]
-										write-verbose "matched listDate = $($_)"
 											if ($item.link -ne "" -and $item.date -ne "")
 											{
 													# leave this alone!!
@@ -348,33 +360,28 @@ format-default : The member "Item" is already present.
 											}
 										}
 									})
-						#write-verbose $url
-						$kblist |% { write-verbose  "Link: $($_.link)" }
 							$kbitems += $kblist;
-						$startct +=10 
-						if ($url -match "st=\d+$") {
-							$url = $url -replace "st=\d+","st=${startct}";
-						}
-						else
-						{
-							$url += "&st=${startct}"
-						}
-					} while ($kblist.count -eq 10);
-                    Write-Verbose "kbitems count: $($kbitems.count)"
+							$startct +=10 
+							if ($url -match "st=\d+$") {
+								$url = $url -replace "st=\d+","st=${startct}";
+							}
+							else
+							{
+								$url += "&st=${startct}"
+							}
+						} while ($kblist.count -eq 10);
+					} # end ctcf foreach
 					if ($kbitems.count) {
 						$kblinks = ( $kbitems |% {write-output $(new-object -type PSObject -Prop $_) } )
 
 						$kblinks |% { 
 							$kblink = $_
-							write-verbose "$($_.date)`t$($_.link)"
 							$relDt = Get-Date $($_.date)
 							$ctxarticle = ($_.link -split "\/")[-1]
-							write-verbose "CTX article $($ctxarticle)"
-							write-verbose "KB link: $($kblink.link)"
 							$wpage = $webclient.DownloadString($kblink.link)
 							$filepattern="href=`"(\S+\.\w{3})`".+title=`"Download`"?"
-#if ($wpage -match $msppat -or $wpage -match $zippat -or $wpage -match $isopat) {
 							if ($wpage -match $filepattern) {
+								write-verbose "$($_.date)`t$($_.link)"
 								$dllink = $matches[1]
 									# Citrix download links are inconsistent
  									# most begin with '/' and are relative to support URL
@@ -416,6 +423,15 @@ format-default : The member "Item" is already present.
 										if ($f -and (! $PSBoundParameters.WhatIf) -and (! $NoTouch)) {
 											$f.lastwritetime = $relDt
 										}
+											# add the CTX article to the pipeline
+										$f | Add-Member -MemberType NoteProperty -Name VendorReference -Value $ctxArticle
+											# unzip any .zip files unless specifically prohibited
+										if (! $NoUnzip -and $f.Extension -match "\.zip") {
+											try {
+												$f | Expand-ZIPFile
+											}
+											catch {}
+										}
 										$logs += New-Object PSObject -Prop @{
 											"DateDownloaded"=(get-date).tostring("yyyyMMddHHmm")
 											;"FileName"=$target
@@ -423,7 +439,6 @@ format-default : The member "Item" is already present.
 											}
 	
 										$dlfiles += $target
-										$f | Add-Member -MemberType NoteProperty -Name VendorReference -Value $ctxArticle
 										write-output $f
 									}
 								}
