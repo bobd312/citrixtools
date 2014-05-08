@@ -226,11 +226,11 @@ format-default : The member "Item" is already present.
 			$produrl += @{prod='XenApp';pver='XenApp+6.5+for+Windows+Server+2008+R2'}
 			$produrl += @{prod='XenApp';pver='XenApp+6.0+for+Windows+Server+2008+R2'}
 			$produrl += @{prod='XenApp';pver='XenApp+5.0+for+Windows+Server+2008'}
-			$produrl += @{prod='Provisioning+Server&pver=Provisioning+Services+7.1'}
-			$produrl += @{prod='Provisioning+Server&pver=Provisioning+Services+7.1'}
-			$produrl += @{prod='Provisioning+Server&pver=Provisioning+Services+7.0'}
-			$produrl += @{prod='Provisioning+Server&pver=Provisioning+Services+6.1'}
-			$produrl += @{prod='Provisioning+Server&pver=Provisioning+Services+6.0'}
+			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.1'}
+			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.1'}
+			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.0'}
+			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.1'}
+			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.0'}
 
 			$prefix = 'http://support.citrix.com/search?searchQuery=*&lang=en&sort=date_desc&ct=Hotfixes&ctcf=Public&';
 			$produrl |% { 
@@ -372,11 +372,16 @@ format-default : The member "Item" is already present.
 							write-verbose "CTX article $($ctxarticle)"
 							write-verbose "KB link: $($kblink.link)"
 							$wpage = $webclient.DownloadString($kblink.link)
-							$filepattern="href=`"(/servlet.+\.\w{3})`"?"
+							$filepattern="href=`"(\S+\.\w{3})`".+title=`"Download`"?"
 #if ($wpage -match $msppat -or $wpage -match $zippat -or $wpage -match $isopat) {
 							if ($wpage -match $filepattern) {
-								$dllink = "http://support.citrix.com"
-								$dllink += $matches[1]
+								$dllink = $matches[1]
+									# Citrix download links are inconsistent
+ 									# most begin with '/' and are relative to support URL
+ 									# some are full URL pointing elsewhere
+								if ($dllink -match "^\/") {
+									$dllink = "http://support.citrix.com${dllink}"
+								}
 								$file = ($dllink -split "\/")[-1]
 									# 
 									# hack for XenServer driver patches
