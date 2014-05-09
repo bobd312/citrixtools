@@ -128,7 +128,7 @@ function Get-saCtxHotFixDownload
 .SYNOPSIS
 Check Citrix lists of publicly available patches and retrieve any we need
 .DESCRIPTION
-Use Citrix RSS feeds to 
+Use Citrix support web page to
 - get the list of CTX articles describing the patches
 - parse each article looking for download URLs for .msp, .zip or .iso files
 - check filename against target directory (default target directory is current directory)
@@ -136,12 +136,9 @@ Use Citrix RSS feeds to
 .PARAMETER FilePath
 Location to check and download files. Default is current directory ($pwd). Valid aliases are Destination, Target and SavePath
 .PARAMETER rssURL
-URL of RSS feed to check. Each product (XenDesktop, XenApp, etc.) and version (6.5, 6.0, etc.) have a unique feed. Default URL is for XenApp 6.5
-Hint: Each product URL is available from the Citrix support page, support.citrix.com
+Product URL to check. Each product (XenDesktop, XenApp, etc.) and version (6.5, 6.0, etc.) have a unique feed. Default URL is for XenApp 6.5
+Hint: Each product URL is available from the Citrix support page, support.citrix.com/search
 - select the product
-- if the product displays an 'Updates' tab, copy the shortcut from the link 'View All'
-- append the query string 
-?rss=on
 .PARAMETER CsvConfigFile
 read URL and Destination folder from CSV-format configuration file
 The file must be in strict .csv format and be importable by Powershell Import-Csv function and must include the headers
@@ -245,6 +242,9 @@ format-default : The member "Item" is already present.
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.1'}
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.0'}
 			$produrl += @{prod='EdgeSight';pver='EdgeSight+for+XenApp+5.4'}
+			$produrl += @{prod='XenServer';pver='XenServer+6.2.0'}
+			$produrl += @{prod='XenServer';pver='XenServer+6.1.0'}
+			$produrl += @{prod='XenServer';pver='XenServer+5.6+SP+2'}
 
 			$prefix = 'http://support.citrix.com/search?searchQuery=*&lang=en&sort=date_desc&ct=Hotfixes&';
 			$produrl |% { 
@@ -340,11 +340,19 @@ format-default : The member "Item" is already present.
 						# new Citrix support page returns 10 links at a time
 						# so we keep fetching until the return count is less than 10
 						# at which point we have all of them
+						# update: this breaks if the total patch count is an integral multiple of 10
+					$pglen = 10;
 					$startct=0;
 					do {
 						$alist = ((new-object net.webclient).downloadstring($url) -split '\n' )
 						$kblist = ($alist |% { 
-										if ($_ -match "(http:\/\/support.citrix.com\/article\/CTX\d+)") 
+										if ($_ -match "(\d+)\ssearch results") 
+										{
+											# try to get the total patch count from the page
+											# then use it to break out of while loop 
+											$patchct = $matches[1]
+										}
+										elseif ($_ -match "(http:\/\/support.citrix.com\/article\/CTX\d+)") 
 										{
 											$item.link = $matches[1];
 										}
@@ -369,7 +377,8 @@ format-default : The member "Item" is already present.
 							{
 								$url += "&st=${startct}"
 							}
-						} while ($kblist.count -eq 10);
+							write-verbose "KB items: $($kbitems.count) Patches: ${patchct} PageCt: ${startct}"
+						} while (($kbitems.count -lt $patchct) -or ($startct -lt $pglen));
 					} # end ctcf foreach
 					if ($kbitems.count) {
 						$kblinks = ( $kbitems |% {write-output $(new-object -type PSObject -Prop $_) } )
