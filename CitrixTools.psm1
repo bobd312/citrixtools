@@ -122,6 +122,113 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 	END {
 	}
 }
+
+function hfxDownload
+{
+	[CmdletBinding(SupportsShouldProcess=$true)]
+	param(
+		[ref]$kblinks
+		,[ref]$webclient
+		,[ref]$logs
+	) # end param() block
+
+	begin {
+		write-verbose "Starting hfxDownload"
+		$hostPrivateData = (get-host).PrivateData
+        $msg = @{$false = "Needed"; $true = "Found"}
+		$vcolor = @{$false = "Magenta"; $true = "Found"}
+        $dlPrompt = @{
+                    $false = @{"msg"="Needed";"fg"="Gray";"bg"="DarkRed"}
+                    ;$true = @{"msg"="Found";"fg"="Green";"bg"="DarkGreen"}
+                    }
+			
+	} # end begin block
+
+	process 
+	{
+		$kblinks.Value |% {
+			$kblink = $_
+			$relDt = Get-Date $($_.date)
+			$ctxarticle = ($_.link -split "\/")[-1]
+			$wpage = ($webclient.Value).DownloadString($kblink.link)
+			$filepattern="href=`"(\S+\.\w{3})`".+title=`"Download`"?"
+			if ($wpage -match $filepattern) {
+				write-verbose "$($_.date)`t$($_.link)"
+				$dllink = $matches[1]
+					# Citrix download links are inconsistent
+ 					# most begin with '/' and are relative to support URL
+ 					# some are full URL pointing elsewhere
+				if ($dllink -match "^\/") {
+					$dllink = "http://support.citrix.com${dllink}"
+				}
+				$file = ($dllink -split "\/")[-1]
+					# 
+					# hack for XenServer driver patches
+					# Citrix doesn't alway include a version number so different versions
+					# have the same name, e.g., emulex.zip
+					# if the filename has no digits, prepend the CTX article
+				if (! ($file -match "\d+")) {
+					$file = $("${ctxarticle}-${file}")
+				}
+				$target = "${FilePath}\${file}"
+				$basename = if ($file -match "(\S+)\.\w+$" ) { write-output $matches[1] }
+				$f = $null
+					#
+					# check for a file or a directory of the same name without extension
+				$found = if (test-path $target) {
+						$f = (dir $target)
+						write-output $true
+					} elseif (test-path "${FilePath}\${basename}") {
+							$f = (dir $FilePath -Filter "${basename}*")
+							write-output $true
+					} else {
+						write-output $false 
+					}
+				$vfgin = $hostPrivateData.VerboseForegroundColor
+				$vbgin = $hostPrivateData.VerboseBackgroundColor
+				$hostPrivateData.VerboseForegroundColor = $dlPrompt.$found.fg
+                $hostPrivateData.VerboseBackgroundColor = $dlPrompt.$found.bg
+				write-verbose "$($dlPrompt.$found.msg): ${file}"
+				$hostPrivateData.VerboseForegroundColor = $vfgin
+				$hostPrivateData.VerboseBackgroundColor = $vbgin
+				if (! $found) {
+					write-verbose "Downloading ${target} from ${dllink}"
+					if (! $PSBoundParameters.WhatIf ) {
+						($webclient.Value).DownloadFile($dllink,$target)
+						$f = (dir $target)
+							#
+							# change the file datetime to match the release date
+						if ($f -and (! $PSBoundParameters.WhatIf) -and (! $NoTouch)) {
+							$f.lastwritetime = $relDt
+						}
+							# add the CTX article to the pipeline
+						$f | Add-Member -MemberType NoteProperty -Name VendorReference -Value $ctxArticle
+							# unzip any .zip files unless specifically prohibited
+						if (! $NoUnzip -and $f.Extension -match "\.zip") {
+							try {
+								$f | Expand-ZIPFile
+							}
+							catch {}
+						}
+						$logs.Value += New-Object PSObject -Prop @{
+							"DateDownloaded"=(get-date).tostring("yyyyMMddHHmm")
+							;"FileName"=$target
+							;"KB"=$kbLink
+							}
+	
+						$dlfiles += $target
+						write-output $f
+					}
+				}
+			}
+		} # end '$kblinks.Value |% ...'
+	} # end process block
+
+	end {
+		write-verbose "Ending hfxDownload"
+	}
+} # end function hfxDownload
+
 function Get-saCtxHotFixDownload
 {
 <#
@@ -221,9 +328,9 @@ format-default : The member "Item" is already present.
 		,[switch]$NoLog = $false
 		,[switch]$NoUnZip = $false
 		,[bool]$Reentrant = $false
-	)
+	) # end 'param()' block
 
-	BEGIN {
+	BEGIN { 
 		if ($WriteConfigSample) {
 			$txt = @()
 			$txt += "rssURL,Destination"
@@ -256,21 +363,26 @@ format-default : The member "Item" is already present.
 			$samplefile = "$((Resolve-Path $pwd).ProviderPath)\HotfixConfigSample.csv"
 			write-verbose "Writing config sample to $samplefile"
 			$txt | Out-File -Encoding ASCII -File $sampleFile
-		} else {
+		} #end 'if ($WriteConfigSample' 
+        else {
 			if ($FromRegistry -or ((! $PSBoundParameters.Reentrant) -and (! $CsvConfigFile))) {
-				if ($CsvConfigFile = if ($prp = (gp HKCU:$regBase).CsvConfigFile) {
+				if ($CsvConfigFile = if ($prp = (gp HKCU:$regBase).CsvConfigFile) 
+                    {
 							# need to add test for property
 							# as it is, if the reg key exists but is empty
 							# function throws exception, but should check HKLM first
 						write-output $prp
-					} elseif ($prp = (gp HKLM:$regBase).CsvConfigFile) {
+				} # 
+                elseif ($prp = (gp HKLM:$regBase).CsvConfigFile) {
 						write-output $prp
 					} 
-				) { $PSBoundParameters.CsvConfigFile = $CsvConfigFile }
+				) {
+                    $PSBoundParameters.CsvConfigFile = $CsvConfigFile 
+                   }
 				write-verbose "Config file from ${regBase}: ${CsvConfigFile}"
 				if (! $CsvConfigFile) { throw "No config path found in registry" }
 				$PSBoundParameters.Remove('FromRegistry') | Out-Null
-			}
+			} #end 'if ($FromRegistry ...'
 				#
 				# if we received a config file as a parameter
 				# recursively pipe it in
@@ -286,21 +398,22 @@ format-default : The member "Item" is already present.
 					# write the log into the same path as the config file
 				if ((split-path $LogFilePath) -match "^$") {
 					$PSBoundParameters.LogFilePath = "$(split-path $CsvConfigFile)\$LogFilePath"
-				}
+				} # end 'if ((split-path $logFilePath...'
 				write-verbose "Logfile: $($PSBoundParameters.LogFilePath)"
 				$PSBoundParameters.Remove('CsvConfigFile') | Out-Null
 				$PSBoundParameters.Reentrant = $true 
 					#
 					# splat the bound parameters to preserve -Whatif and -Verbose 
 				Import-Csv $CsvConfigFile | & $($MyInvocation.MyCommand.Name) @PSBoundParameters
-			}	
-			$msg = @{$false = "Needed"; $true = "Found"}
+			} # end 'if ($CsvConfigFile'
+			#$msg = @{$false = "Needed"; $true = "Found"}
 				# array of files downloaded
 			$dlfiles = @()
 			$logs = @()
 			$webclient = new-object System.Net.Webclient
+			$hostPrivateData = (get-host).PrivateData
 		}
-	}
+	} # end 'BEGIN' block
 	PROCESS {
 			#
 			# if we received a config file we'll be called recursively
@@ -308,21 +421,21 @@ format-default : The member "Item" is already present.
 		if ((! $WriteConfigSample) -and (! $CsvConfigFile)) {
 			$rssURL |% {
 				write-verbose $_
+                    # skip config lines beginning with comment character
 				if (! ($_ -match "^#")) 
 				{
 				$thisverurl = $_
 				write-verbose $thisverurl
-				write-verbose "Logfile: $($LogFilePath)"
 				try {
 					if (! (test-path $FilePath)) { 
 						try { 
 							mkdir $FilePath -Force
-						}
+						} # end 'try'
 						catch {
 							$err = new-object System.Management.Automation.ItemNotFoundException
 							throw $err
-						}
-					}
+						} # end 'catch'
+					} # end 'if (! Test-path ... '
 					$kblinks = new-object -type PSObject
 					$kblist = @{};
 					$kbitems = @()
@@ -333,6 +446,10 @@ format-default : The member "Item" is already present.
 						# but would require two lines for each product
 						# however, making the config URL the absolute authority *would*
 						# permit users to specify *all* patches, including Limited, if desired
+                        # d'oh - now we need a new switch, e.g.
+                        # -ConfigURLisAbsolute
+                        # or
+                        # -LiteralURL
 					foreach ($ctcf in ("Recommended","Public")) {
 						$url = "${thisverurl}&ctcf=${ctcf}"
 						write-verbose $url
@@ -344,7 +461,7 @@ format-default : The member "Item" is already present.
 					$pglen = 10;
 					$startct=0;
 					do {
-						$alist = ((new-object net.webclient).downloadstring($url) -split '\n' )
+						$alist = ($webclient.downloadstring($url) -split '\n' )
 						$kblist = ($alist |% { 
 										if ($_ -match "(\d+)\ssearch results") 
 										{
@@ -366,10 +483,11 @@ format-default : The member "Item" is already present.
 												write-output $item
 												$item=@{link="";date=""}
 											}
-										}
-									})
+										} # end 'elseif'
+									}) #end '$kblist = ($alist ...'
 							$kbitems += $kblist;
-							$startct +=10 
+                                # increment page counter and update query URL
+							$startct += $pglen
 							if ($url -match "st=\d+$") {
 								$url = $url -replace "st=\d+","st=${startct}";
 							}
@@ -379,89 +497,21 @@ format-default : The member "Item" is already present.
 							}
 							write-verbose "KB items: $($kbitems.count) Patches: ${patchct} PageCt: ${startct}"
 						} while (($kbitems.count -lt $patchct) -or ($startct -lt $pglen));
-					} # end ctcf foreach
+					} # end 'foreach ctcf'
 					if ($kbitems.count) {
 						$kblinks = ( $kbitems |% {write-output $(new-object -type PSObject -Prop $_) } )
 
-						$kblinks |% { 
-							$kblink = $_
-							$relDt = Get-Date $($_.date)
-							$ctxarticle = ($_.link -split "\/")[-1]
-							$wpage = $webclient.DownloadString($kblink.link)
-							$filepattern="href=`"(\S+\.\w{3})`".+title=`"Download`"?"
-							if ($wpage -match $filepattern) {
-								write-verbose "$($_.date)`t$($_.link)"
-								$dllink = $matches[1]
-									# Citrix download links are inconsistent
- 									# most begin with '/' and are relative to support URL
- 									# some are full URL pointing elsewhere
-								if ($dllink -match "^\/") {
-									$dllink = "http://support.citrix.com${dllink}"
-								}
-								$file = ($dllink -split "\/")[-1]
-									# 
-									# hack for XenServer driver patches
-									# Citrix doesn't alway include a version number so different versions
-									# have the same name, e.g., emulex.zip
-									# if the filename has no digits, prepend the CTX article
-								if (! ($file -match "\d+")) {
-									$file = $("${ctxarticle}-${file}")
-								}
-								$target = "${FilePath}\${file}"
-								$basename = if ($file -match "(\S+)\.\w+$" ) { write-output $matches[1] }
-								$f = $null
-									#
-									# check for a file or a directory of the same name without extension
-								$found = if (test-path $target) {
-										$f = (dir $target)
-										write-output $true
-									} elseif (test-path "${FilePath}\${basename}") {
-											$f = (dir $FilePath -Filter "${basename}*")
-											write-output $true
-									} else {
-										write-output $false 
-									}
-								write-verbose "$($msg[$found]): ${file}"
-								if (! $found) {
-									write-verbose "Downloading ${target} from ${dllink}"
-									if (! $PSBoundParameters.WhatIf ) {
-										$webclient.DownloadFile($dllink,$target)
-										$f = (dir $target)
-											#
-											# change the file datetime to match the release date
-										if ($f -and (! $PSBoundParameters.WhatIf) -and (! $NoTouch)) {
-											$f.lastwritetime = $relDt
-										}
-											# add the CTX article to the pipeline
-										$f | Add-Member -MemberType NoteProperty -Name VendorReference -Value $ctxArticle
-											# unzip any .zip files unless specifically prohibited
-										if (! $NoUnzip -and $f.Extension -match "\.zip") {
-											try {
-												$f | Expand-ZIPFile
-											}
-											catch {}
-										}
-										$logs += New-Object PSObject -Prop @{
-											"DateDownloaded"=(get-date).tostring("yyyyMMddHHmm")
-											;"FileName"=$target
-											;"KB"=$kbLink
-											}
-	
-										$dlfiles += $target
-										write-output $f
-									}
-								}
-							}
-						}
-					}
-				}
+						hfxDownload ([ref]$kblinks) ([ref]$webclient) ([ref]$logs)
+
+					} # end 'if($kbitems.count)'
+				} # end 'try'
 				catch [System.Exception] {
 					write-warning "Error `n$($_)`nretrieving `n$($url) `nto `n${FilePath}"
-				}
-			}
-			}
-		}
-	}
+				} # end 'catch '
+			} # end 'if ( (! ($_ -match "^#"))
+			} # end 'rssURL |% '
+		} #end 'if ..' check for csvconfigfile
+	} # end 'process' block
 	END {
 		if ((! $NoLog) -and $logs.Count) {
 			if (! (test-path $LogFilePath)) {
@@ -470,8 +520,8 @@ format-default : The member "Item" is already present.
 				@($logs | ConvertTo-Csv -NoTypeInformation)[1..$logs.Count] | Out-File -Encoding ASCII -Append -File $LogFilePath
 			}
 		}
-	}
-}
+	} #end 'end' block
+} # end function Get-saCtxHotFixDownload
 
 function Get-saCtxProductPrefix
 {
@@ -639,6 +689,37 @@ http://msdn.microsoft.com/en-us/library/bb629393.aspx
 
 }
 
+function Set-saCtxWIShowDesktopViewer
+{
+	[CmdletBinding(SupportsShouldProcess=$true)]
+	param (
+		[Parameter(ValueFromPipelineByPropertyName=$true)]
+		[string[]]$FullName
+		,[switch]$Off = $false
+		,[Parameter(ValueFromPipeline=$true)]
+		[object[]]$FileList
+	)
+
+	begin {
+	}
+
+	process {
+		$FullName |% {
+			$text = "ShowDesktopViewer="
+			$text += if ($off) { "Off" } else { "On" }
+			write-verbose "Off: ${Off} `t Text: ${text}"
+			if (! ( (cat $_) -match "^$text") ) {
+				write-output $text | Out-File -Enc ASCII -Append -File $_
+			}
+		}
+	}
+
+	end {
+
+	}
+
+}
+
 function Set-saCtxICAVirtualChannelPriority
 {
 <#
@@ -711,34 +792,12 @@ OEMOEM ,3
 
 }
 
-function Set-saCtxWIShowDesktopViewer
-{
-	[CmdletBinding(SupportsShouldProcess=$true)]
-	param (
-		[Parameter(ValueFromPipelineByPropertyName=$true)]
-		[string[]]$FullName
-		,[switch]$Off = $false
-		,[Parameter(ValueFromPipeline=$true)]
-		[object[]]$FileList
-	)
-
-	begin {
-	}
-
-	process {
-		$FullName |% {
-			$text = "ShowDesktopViewer="
-			$text += if ($off) { "Off" } else { "On" }
-			write-verbose "Off: ${Off} `t Text: ${text}"
-			if (! ( (cat $_) -match "^$text") ) {
-				write-output $text | Out-File -Enc ASCII -Append -File $_
-			}
-		}
-	}
-
-	end {
-
-	}
-
-}
-
+Export-ModuleMember -Function Expand-ZIPFile
+Export-ModuleMember -Function Find-saCtxNeededPatches
+Export-ModuleMember -Function Get-saCtxHotFixDownload
+Export-ModuleMember -Function Get-saCtxProductPrefix
+Export-ModuleMember -Function Get-saXALoggedOnUserInfo
+Export-ModuleMember -Function Set-saCRLDisabled
+Export-ModuleMember -Function Set-saCtxICAVirtualChannelPriority
+Export-ModuleMember -Function Set-saCtxWIShowDesktopViewer
+Export-ModuleMember -Function Set-saPrinterAttributesForCUPSperCTX136265
