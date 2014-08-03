@@ -107,9 +107,9 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 		 
 		        try { 
 		 
-					$zip = $shell.NameSpace($FullName)
-					if (! (test-path $Destination) ) { md $Destination -Force }
-					$shell.Namespace($Destination).copyhere($zip.items())
+					$zip = $shell.NameSpace((Resolve-Path $FullName).Providerpath)
+					if (! (test-path $Destination) ) { md $Destination -Force  | Out-Null}
+					$shell.Namespace((resolve-path $Destination).ProviderPath).copyhere($zip.items())
 				}
 		#	} 
 		        catch { 
@@ -134,6 +134,8 @@ function hfxDownload
 
 	begin {
 		write-verbose "Starting hfxDownload"
+		$superseded = @()
+			# PrivateData is how we manipulate screen colors in Write-Verbose
 		$hostPrivateData = (get-host).PrivateData
         $msg = @{$false = "Needed"; $true = "Found"}
 		$vcolor = @{$false = "Magenta"; $true = "Found"}
@@ -151,6 +153,13 @@ function hfxDownload
 			$relDt = Get-Date $($_.date)
 			$ctxarticle = ($_.link -split "\/")[-1]
 			$wpage = ($webclient.Value).DownloadString($kblink.link)
+				# somewhere in here
+				# we should look for SUPERSEDED  or 'Replaces'
+			if ($wpage -cmatch "SUPER[SC]ED") { 
+					if ($pg -match 'Hotfix package name.+\>(X\S+?)\<') { 
+						$superseded += $matches[1] 
+					} 
+			}
 			$filepattern="href=`"(\S+\.\w{3})`".+title=`"Download`"?"
 			if ($wpage -match $filepattern) {
 				write-verbose "$($_.date)`t$($_.link)"
@@ -225,6 +234,14 @@ function hfxDownload
 	} # end process block
 
 	end {
+		if ($superseded.Count -gt 0 ) {
+			$superseded |% {
+				$target = "${FilePath}\${_}"
+				if (test-path $target) {
+					ren $target "SUPERSEDED_${target}"
+				}
+			}
+		}
 		write-verbose "Ending hfxDownload"
 	}
 } # end function hfxDownload
@@ -343,7 +360,6 @@ format-default : The member "Item" is already present.
 			$produrl += @{prod='XenApp';pver='XenApp+6.5+for+Windows+Server+2008+R2'}
 			$produrl += @{prod='XenApp';pver='XenApp+6.0+for+Windows+Server+2008+R2'}
 			$produrl += @{prod='XenApp';pver='XenApp+5.0+for+Windows+Server+2008'}
-			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.1'}
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.1'}
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.0'}
 			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.1'}
