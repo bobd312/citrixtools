@@ -123,6 +123,47 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 	}
 }
 
+function hfxGetReplacedHotfixes
+{
+	[CmdletBinding()]
+	param(
+		[string[]]$links
+		 )
+	begin {
+		$ie = new-object -com InternetExplorer.Application
+		$superseded = @()
+	}
+	
+	process {
+	
+# start replaces
+				# at the moment this section breaks the download
+				# get the list of hotfixes this patch replaces
+				# invoke IE so we can navigate the DOM
+				# rather than try to parse HTML with PoSh regex
+			$links |% {
+				$link = $_
+				$ie.Navigate($link)
+				$doc = $ie.Document
+				$elements = @($doc.getElementsByTagName("rmc_replaces_list"))
+				if ($elements.count  -gt 0) {
+					$replaces = $elements[0].innerText
+					$superseded += $replaces -split ', '
+				}
+			}
+
+# end replaces #
+	}
+	end {
+			$superseded |% { 
+				write-verbose "SUPERSEDED: $_"
+				write-output $_ 
+			}
+	
+	}
+
+}
+
 function hfxDownload
 {
 	[CmdletBinding(SupportsShouldProcess=$true)]
@@ -229,6 +270,7 @@ function hfxDownload
 						write-output $f
 					}
 				}
+#$superseded += hfxGetReplacedHotfixes -Links $kblink.link @PSBoundParameters
 			}
 		} # end '$kblinks.Value |% ...'
 	} # end process block
