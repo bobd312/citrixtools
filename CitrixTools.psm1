@@ -73,20 +73,9 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 
 	PROCESS {
 			$FullName = (Resolve-Path $FullName).ProviderPath
-			write-verbose "PipelineLength: $(($PSCmdlet.MyInvocation).PipelineLength)"
-			write-verbose "PipelinePosition: $(($PSCmdlet.MyInvocation).PipelinePosition)"
-			write-verbose "Dest from bound parameters - ${Destination}"
 			if (($PSCmdlet.MyInvocation.PipelineLength -gt 1) -or (! $Destination)) {
-				write-verbose "setting Dest manually"
 				$Destination = "${DirectoryName}\${BaseName}"
-				[string[]]$Destination = "$(split-path -parent $FullName)\$( ((split-path -leaf $FullName) -split "\.")[0])"
 			}
-			write-verbose "Dest - ${Destination}"
-			write-verbose "Dir - ${DirectoryName}"
-			write-verbose "base - ${BaseName}"
-			write-verbose "File - ${_}"
-			write-verbose "File - ${FullName}"
- 
 		If (! $PSBoundParameters.WhatIf) {
 			If ($PSVersionTable.PSVersion.Major -ge 3 -and 
 	       ((Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -like "4.5*" -or 
@@ -111,7 +100,6 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 					if (! (test-path $Destination) ) { md $Destination -Force  | Out-Null}
 					$shell.Namespace((resolve-path $Destination).ProviderPath).copyhere($zip.items())
 				}
-		#	} 
 		        catch { 
 		            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
 		        } 
