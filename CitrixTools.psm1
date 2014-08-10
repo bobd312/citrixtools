@@ -66,8 +66,10 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 	)
 
 	BEGIN {
+<#
 			write-verbose "Begin PipelineLength: $(($PSCmdlet.MyInvocation).PipelineLength)"
 			write-verbose "Begin PipelinePosition: $(($PSCmdlet.MyInvocation).PipelinePosition)"
+#>
 		$shell = new-object -com shell.application
 	}
 
@@ -77,33 +79,39 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 				$Destination = "${DirectoryName}\${BaseName}"
 			}
 		If (! $PSBoundParameters.WhatIf) {
-			If ($PSVersionTable.PSVersion.Major -ge 3 -and 
-	       ((Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -like "4.5*" -or 
-	       (Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Client" -ErrorAction SilentlyContinue).Version -like "4.5*"))
-			{
-				Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using .NET 4.5" 
-		        try { 
-		            [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null 
-		            [System.IO.Compression.ZipFile]::ExtractToDirectory("$Fullname", "$Destination") 
-		        } 
-		        catch { 
-		            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
-		        } 
-			}
-		    else { 
-		 
-		        Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using COM" 
-		 
-		        try { 
-		 
-					$zip = $shell.NameSpace((Resolve-Path $FullName).Providerpath)
-					if (! (test-path $Destination) ) { md $Destination -Force  | Out-Null}
-					$shell.Namespace((resolve-path $Destination).ProviderPath).copyhere($zip.items())
+			if (! (test-path $Destination) ) { md $Destination -Force  | Out-Null}
+				# if $Destination exists and is empty
+			if ( (test-path $Destination) -and ( (dir $Destination).Count -eq 0)) { 
+				If ($PSVersionTable.PSVersion.Major -ge 3 -and 
+		       ((Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -like "4.5*" -or 
+		       (Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Client" -ErrorAction SilentlyContinue).Version -like "4.5*"))
+				{
+					Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using .NET 4.5" 
+			        try { 
+			            [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null 
+			            [System.IO.Compression.ZipFile]::ExtractToDirectory("$Fullname", "$Destination") 
+			        } 
+			        catch { 
+			            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
+			        } 
 				}
-		        catch { 
-		            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
-		        } 
-		    } 
+			    else { 
+			 
+			        Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using COM" 
+			 
+			        try { 
+			 
+						$zip = $shell.NameSpace((Resolve-Path $FullName).Providerpath)
+						$shell.Namespace((resolve-path $Destination).ProviderPath).copyhere($zip.items())
+					}
+			        catch { 
+			            Write-Warning -Message "Unexpected Error. Error details: $_.Exception.Message" 
+			        } 
+			    } 
+			}
+			else {
+				write-warning "`tskipping ${Fullname}: ${Destination} not empty, "
+			}
 		}
 	}
 
