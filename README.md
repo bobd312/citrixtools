@@ -1,8 +1,9 @@
 CitrixTools
 ===========
 
-Powershell module for working with Citrix products
-(part of the saTools library)
+Powershell module for working with Citrix products  
+(part of the saTools library)  
+Author: [Bob Daniel](http://www.linkedin.com/in/bobdaniel)  
 
 Most useful of exported functions right now is Get-saCtxHotfixDownload, which retrieves from support.citrix.com all 'Public' and 'Recommended' hotfixes for selected products.
 
@@ -16,7 +17,7 @@ downloads all 'Public' and 'Recommended' hotfixes for listed products. It also w
 `Get-saCtxHotfixDownload`  
 and download patches for the same products.
 
-Subsequent downloads will retrieve only hotfixes that Cirix has added since the last download. By default, download activity is logged to _CtxHotfixDownloadLog.csv_ in the same directory with the config file. Logfile path can be changed or logging turned off with appropriate switches _-LogfilePath_ and  _-NoLog_.
+Subsequent downloads will retrieve only hotfixes that Citrix has added since the last download. By default, download activity is logged to _CtxHotfixDownloadLog.csv_ in the same directory with the config file. Logfile path can be changed or logging turned off with appropriate switches _-LogfilePath_ and  _-NoLog_.
 
 .zip files will be automatically extracted into a folder of the same name as as the .zip archive in the same directory. Can be turned off with switch _-NoUnzip_.
 
