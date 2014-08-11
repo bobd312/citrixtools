@@ -70,6 +70,8 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 			write-verbose "Begin PipelineLength: $(($PSCmdlet.MyInvocation).PipelineLength)"
 			write-verbose "Begin PipelinePosition: $(($PSCmdlet.MyInvocation).PipelinePosition)"
 #>
+		$fg = $host.UI.RawUI.ForegroundColor
+		$bg = $host.UI.RawUI.BackgroundColor
 		$shell = new-object -com shell.application
 	}
 
@@ -81,12 +83,15 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 		If (! $PSBoundParameters.WhatIf) {
 			if (! (test-path $Destination) ) { md $Destination -Force  | Out-Null}
 				# if $Destination exists and is empty
-			if ( (test-path $Destination) -and ( (dir $Destination).Count -eq 0)) { 
+			if ( (test-path $Destination) -and ( @(dir $Destination).Count -eq 0)) { 
 				If ($PSVersionTable.PSVersion.Major -ge 3 -and 
 		       ((Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -like "4.5*" -or 
 		       (Get-ItemProperty -Path "HKLM:\Software\Microsoft\NET Framework Setup\NDP\v4\Client" -ErrorAction SilentlyContinue).Version -like "4.5*"))
 				{
-					Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using .NET 4.5" 
+					$host.UI.RawUI.ForegroundColor = [ConsoleColor]::Green
+					$host.PrivateData.VerboseForegroundColor = [ConsoleColor]::Green
+					Write-Verbose -Message "extracting $FullName to location $Destination using .NET 4.5" 
+					$host.UI.RawUI.ForegroundColor = $fg
 			        try { 
 			            [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null 
 			            [System.IO.Compression.ZipFile]::ExtractToDirectory("$Fullname", "$Destination") 
@@ -96,9 +101,10 @@ http://gallery.technet.microsoft.com/scriptcenter/PowerShell-Function-to-727d620
 			        } 
 				}
 			    else { 
-			 
-			        Write-Verbose -Message "Attempting to Unzip $FullName to location $Destination using COM" 
-			 
+					$host.UI.RawUI.ForegroundColor = [ConsoleColor]::Blue
+					$host.PrivateData.VerboseForegroundColor = [ConsoleColor]::Cyan
+			        Write-Verbose -Message "extracting $FullName to location $Destination using COM" 
+					$host.UI.RawUI.ForegroundColor = $fg
 			        try { 
 			 
 						$zip = $shell.NameSpace((Resolve-Path $FullName).Providerpath)
