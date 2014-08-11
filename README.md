@@ -8,7 +8,7 @@ Author: [Bob Daniel](http://www.linkedin.com/in/bobdaniel)
 Most useful of exported functions right now is Get-saCtxHotfixDownload, which retrieves from support.citrix.com all 'Public' and 'Recommended' hotfixes for selected products.
 
 ###Usage
-Several modes are supported, but mostly useful is probably to create a config file and use it to retrieve hotfixes.  
+Several modes are supported, but most convenient is probably to create a config file and use it to retrieve hotfixes. _-Verbose_ and _-Whatif_ are supported.   
 `Get-saCtxHotfixDownload -WriteConfigFile`   
 writes a config file into the current directory. It uses the current directory as the base and generates a .csv file, _HotfixSampleConfig.csv_ in the current directory. Edit this file and remove any products you don't want to patch. Change the name if you want, e.g. _MyHotfixList.csv_.
 
