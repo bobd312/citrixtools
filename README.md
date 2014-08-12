@@ -2,7 +2,7 @@ CitrixTools
 ===========
 
 Powershell module for working with Citrix products  
-(part of the saTools library)  
+part of the saTools library  
 Author: [Bob Daniel](http://www.linkedin.com/in/bobdaniel)  
 
 Most useful of exported functions right now is Get-saCtxHotfixDownload, which retrieves from support.citrix.com all 'Public' and 'Recommended' hotfixes for selected products.
