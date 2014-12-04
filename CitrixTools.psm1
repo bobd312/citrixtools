@@ -396,6 +396,7 @@ format-default : The member "Item" is already present.
 			$txt = @()
 			$txt += "rssURL,Destination"
 			$produrl = @();
+			$produrl += @{prod='XenDesktop';pver='XenDesktop+7.6'}
 			$produrl += @{prod='XenDesktop';pver='XenDesktop+7.5'}
 			$produrl += @{prod='XenDesktop';pver='XenDesktop+7.1'}
 			$produrl += @{prod='XenDesktop';pver='XenDesktop+7'}
@@ -404,16 +405,17 @@ format-default : The member "Item" is already present.
 			$produrl += @{prod='XenApp';pver='XenApp+6.5+for+Windows+Server+2008+R2'}
 			$produrl += @{prod='XenApp';pver='XenApp+6.0+for+Windows+Server+2008+R2'}
 			$produrl += @{prod='XenApp';pver='XenApp+5.0+for+Windows+Server+2008'}
-			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.1'}
-			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+7.0'}
-			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.1'}
-			$produrl += @{prod='Provisioning+Server';pver='Provisioning+Services+6.0'}
+			$produrl += @{prod='Provisioning+Services';pver='Provisioning Services 7.6'}
+			$produrl += @{prod='Provisioning+Services';pver='Provisioning Services 7.1'}
+			$produrl += @{prod='Provisioning+Services';pver='Provisioning Services 7.0'}
+			$produrl += @{prod='Provisioning+Services';pver='Provisioning Services 6.1'}
+			$produrl += @{prod='Provisioning+Services';pver='Provisioning Services 6.0'}
 			$produrl += @{prod='EdgeSight';pver='EdgeSight+for+XenApp+5.4'}
 			$produrl += @{prod='XenServer';pver='XenServer+6.2.0'}
 			$produrl += @{prod='XenServer';pver='XenServer+6.1.0'}
 			$produrl += @{prod='XenServer';pver='XenServer+5.6+SP+2'}
 
-			$prefix = 'http://support.citrix.com/search?searchQuery=*&lang=en&sort=date_desc&ct=Hotfixes&';
+			$prefix = 'http://support.citrix.com/search?searchQuery=%3F&lang=en&sort=date_desc&ct=Hotfixes&';
 			$produrl |% { 
 					$prod = $_.prod;
 					$pver = $_.pver;
